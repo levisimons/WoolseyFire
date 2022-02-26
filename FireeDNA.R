@@ -9,6 +9,7 @@ require(ggplot2)
 require(viridis)
 require(sf)
 require(nngeo)
+require(reshape2)
 
 wd <- "~/Desktop/CUBoulder/"
 #wd <- "/home1/alsimons/CUBoulder"
@@ -66,6 +67,7 @@ env.names <- gsub("./|.tif","",env.files)
 #Stack environmental layers
 env.data <- stack(c(env.files))
 
+#Get summary statistics, per HUC12 watershed, for environmental layers used in this project.
 #Get mean raster value per HUC 12 watershed.
 watershedMeans <- sf::st_as_sf(extract(env.data, as_Spatial(watersheds), fun=mean, na.rm=TRUE, df=TRUE, sp=TRUE))
 #Get standard deviation on the raster value per HUC 12 watershed.
@@ -80,7 +82,6 @@ tmp <- NULL
 watershedSamplingIntersections <- sf::st_join(SampleCoordinates,watersheds,suffix=c("",".y"),join=st_nn,k=1,maxdist=1000)
 #Join watersheds. summary statistics, and sampling data into a single spatial dataframe.
 watershedsWithMetadata <- sf::st_join(watershedSamplingIntersections,watershedSummary,suffix=c(".y",""),join=st_nn,k=1,maxdist=1000)
-
 #Get coordinates into a data frame.
 xy <- as.data.frame(sf::st_coordinates(watershedsWithMetadata))
 colnames(xy) <- c("longitude","latitude")
@@ -115,3 +116,14 @@ for(env.name in env.names){
     ggsave(TestMap,file=paste(gsub("1000m","",env.name),"WatershedModes.png",sep=""),width=7,height=7,units="in")
   }
 }
+
+#Plot Pearson correlation coefficients between environmental layers.
+RasterCor <- raster::layerStats(env.data,'pearson',na.rm=T)
+RasterCor <- as.matrix(RasterCor$`pearson correlation coefficient`)
+RasterCor <- round(RasterCor,2)
+RasterCor <- reshape2::melt(RasterCor)
+ggplot(RasterCor,aes(x=Var1,y=Var2,fill=value))+
+  geom_tile()+
+  geom_text(aes(Var2, Var1, label = value), color = "black", size = 4)+
+  scale_fill_viridis_c()+
+  theme(axis.text.y=element_text(size=12),axis.text.x = element_text(angle = 45, vjust = 1, size = 12, hjust = 1))
